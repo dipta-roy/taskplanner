@@ -1,0 +1,74 @@
+Sub CalculateTaskDates()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("Sheet1") ' Change this to your sheet name
+    
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row ' Finds the last row with data in column A
+    
+    Dim i As Long
+    Dim startDate As Date
+    Dim finishDate As Date
+    Dim duration As Long
+    Dim dependency As Variant ' Changed to Variant to handle empty cells
+    
+    For i = 2 To lastRow ' Assumes the first row is headers
+        ' If there's a dependency, get the finish date of the dependent task and calculate the start date
+        dependency = ws.Cells(i, 4).Value ' Dependency (ID of the dependent task)
+        If Not IsEmpty(dependency) Then
+            Dim dependentFinishDate As Date
+            dependentFinishDate = Application.WorksheetFunction.VLookup(dependency, ws.Range("A:F"), 6, False)
+            
+            startDate = dependentFinishDate + 1
+            If Weekday(startDate, vbMonday) = 6 Then
+                startDate = startDate + 2 ' If Saturday, move to Monday
+            ElseIf Weekday(startDate, vbMonday) = 7 Then
+                startDate = startDate + 1 ' If Sunday, move to Monday
+            End If
+        Else
+            startDate = ws.Cells(i, 5).Value ' Start Date
+        End If
+        
+        ws.Cells(i, 5).Value = startDate ' Write Start Date
+        
+        duration = ws.Cells(i, 3).Value ' Duration
+        
+        ' Calculate Finish Date using WORKDAY function to skip weekends
+        If startDate <> "12:00:00 AM" Then
+            finishDate = Application.WorksheetFunction.WorkDay(startDate - 1, AdjustDurationForHolidays(startDate, (startDate + duration), duration))
+             ws.Cells(i, 6).Value = finishDate ' Write Finish Date
+        Else
+         ws.Cells(i, 5).Value = ""
+        End If
+       
+    Next i
+End Sub
+
+
+Function AdjustDurationForHolidays(startDate As Date, finishDate As Date, duration As Long) As Long
+    Dim holidaySheet As Worksheet
+    Set holidaySheet = ThisWorkbook.Sheets("Sheet2") ' Change this to your holiday sheet name
+    
+    Dim lastHolidayRow As Long
+    lastHolidayRow = holidaySheet.Cells(holidaySheet.Rows.Count, "A").End(xlUp).Row ' Finds the last row with data in column A in the holiday sheet
+    
+    Dim j As Long
+    Dim holidayCount As Long
+    holidayCount = 0
+    
+    ' Iterate through holidays to count how many fall between startDate and finishDate
+    For j = 2 To lastHolidayRow
+        Dim holidayDate As Date
+        holidayDate = holidaySheet.Cells(j, 1).Value
+        
+        If holidayDate >= startDate And holidayDate <= finishDate Then
+            holidayCount = holidayCount + 1
+        End If
+    Next j
+    
+    ' Increment duration based on the number of holidays found
+    duration = duration + holidayCount
+    
+    ' Return adjusted duration
+    AdjustDurationForHolidays = duration
+End Function
+
